@@ -2,29 +2,92 @@ name: Deploy AWS Lambda
 
 on:
   push:
-    branches: 
+    branches:
       - main
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    
+    runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install zip tool
         uses: montudor/action-zip@v1
+
       - name: Create Zip file for Lambda function
         run: |
           cd src
           zip -r ../code.zip .
-      - name: AWS CLI v2
+
+      - name: Install AWS CLI v2
         uses: imehedi/actions-awscli-v2@latest
-        with:
-          args: "lambda update-function-code \
-            --function-name arn:aws:lambda:eu-north-1:739961806457:function:my_function \
-            --zip-file fileb://code.zip"
-      
+
+      - name: Create or Update Lambda Function
+        shell: pwsh
+        run: |
+          $FunctionName = "my_function"
+          $Region = "eu-north-1"
+          $RoleArn = "arn:aws:iam::739961806457:role/lambda-execution-role"
+
+          aws lambda get-function `
+            --function-name $FunctionName `
+            --region $Region 2>$null
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Lambda function does not exist. Creating..."
+
+            aws lambda create-function `
+              --function-name $FunctionName `
+              --runtime dotnet6 `
+              --role $RoleArn `
+              --handler MyLambda::MyLambda.Function::FunctionHandler `
+              --zip-file fileb://code.zip `
+              --region $Region
+          }
+          else {
+            Write-Host "Lambda function exists. Updating code..."
+
+            aws lambda update-function-code `
+              --function-name $FunctionName `
+              --zip-file fileb://code.zip `
+              --region $Region
+          }
+
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: "eu-north-1"
+          AWS_DEFAULT_REGION: eu-north-1
+
+
+# name: Deploy AWS Lambda
+
+# on:
+#   push:
+#     branches: 
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: windows-latest
+    
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Install zip tool
+#         uses: montudor/action-zip@v1
+#       - name: Create Zip file for Lambda function
+#         run: |
+#           cd src
+#           zip -r ../code.zip .
+#       - name: AWS CLI v2
+#         uses: imehedi/actions-awscli-v2@latest
+#         with:
+#           args: "lambda update-function-code \
+#             --function-name arn:aws:lambda:eu-north-1:739961806457:function:my_function \
+#             --zip-file fileb://code.zip"
+      
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_DEFAULT_REGION: "eu-north-1"
