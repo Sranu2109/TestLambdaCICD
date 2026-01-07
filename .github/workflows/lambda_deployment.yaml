@@ -1,4 +1,4 @@
-name: Deploy AWS Lambda
+name: Deploy AWS Lambda (Python)
 
 on:
   push:
@@ -10,13 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Install zip tool
-        uses: montudor/action-zip@v1
-
-      - name: Create Zip file for Lambda function
+      - name: Zip Lambda source
         run: |
           cd src
           zip -r ../code.zip .
@@ -25,40 +22,27 @@ jobs:
         uses: imehedi/actions-awscli-v2@latest
 
       - name: Create or Update Lambda Function
-        shell: pwsh
-        run: |
-          $FunctionName = "my_function"
-          $Region = "eu-north-1"
-          $RoleArn = "arn:aws:iam::739961806457:role/lambda-execution-role"
-
-          aws lambda get-function `
-            --function-name $FunctionName `
-            --region $Region 2>$null
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Lambda function does not exist. Creating..."
-
-            aws lambda create-function `
-              --function-name $FunctionName `
-              --runtime dotnet6 `
-              --role $RoleArn `
-              --handler MyLambda::MyLambda.Function::FunctionHandler `
-              --zip-file fileb://code.zip `
-              --region $Region
-          }
-          else {
-            Write-Host "Lambda function exists. Updating code..."
-
-            aws lambda update-function-code `
-              --function-name $FunctionName `
-              --zip-file fileb://code.zip `
-              --region $Region
-          }
-
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: eu-north-1
+          FUNCTION_NAME: my_function
+        run: |
+          if aws lambda get-function --function-name $FUNCTION_NAME > /dev/null 2>&1; then
+            echo "Lambda exists. Updating code..."
+            aws lambda update-function-code \
+              --function-name $FUNCTION_NAME \
+              --zip-file fileb://code.zip
+          else
+            echo "Lambda does not exist. Creating function..."
+            aws lambda create-function \
+              --function-name $FUNCTION_NAME \
+              --runtime python3.11 \
+              --role ${{ secrets.LAMBDA_ROLE_ARN }} \
+              --handler lambda_function.lambda_handler \
+              --zip-file fileb://code.zip
+          fi
+
 
 
 # name: Deploy AWS Lambda
